@@ -1,6 +1,4 @@
-"""
-Quick script to retrieve and save table schema.
-"""
+# Independent helper script to retrieve table schema if required. 
 
 import psycopg2
 from pathlib import Path

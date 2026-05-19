@@ -1,4 +1,4 @@
-"""CWFIS Lightning project modules."""
+# Project modules
 
 from .config import DB_CONFIG, OUTPUT_DIR
 from .db_connector import LightningDBConnector

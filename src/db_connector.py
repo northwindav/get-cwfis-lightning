@@ -1,7 +1,4 @@
-"""
-Database connector module for CWFIS Lightning project.
-Handles PostgreSQL connections and queries.
-"""
+# Connect to the CWFIS db, query recent strikes, and export to CSV.
 
 import psycopg2
 import pandas as pd
@@ -21,10 +18,9 @@ logger = logging.getLogger(__name__)
 
 
 class LightningDBConnector:
-    """Connect to and query the CWFIS CLDN lightning database."""
     
     def __init__(self):
-        """Initialize database configuration."""
+
         self.host = DB_CONFIG['host']
         self.user = DB_CONFIG['user']
         self.database = DB_CONFIG['database']
@@ -33,7 +29,7 @@ class LightningDBConnector:
         self.conn = None
         
     def connect(self):
-        """Establish PostgreSQL connection."""
+        
         try:
             self.conn = psycopg2.connect(
                 host=self.host,
@@ -48,16 +44,13 @@ class LightningDBConnector:
             raise
     
     def close(self):
-        """Close database connection."""
+        
         if self.conn:
             self.conn.close()
             logger.info("Database connection closed")
     
     def get_table_info(self):
-        """
-        Retrieve metadata about the CLDN strikes table.
-        Returns column names, data types, and row count.
-        """
+       
         if not self.conn:
             self.connect()
         
@@ -104,15 +97,7 @@ class LightningDBConnector:
             raise
     
     def query_strikes(self, hours=48):
-        """
-        Query lightning strikes from the past N hours.
-        
-        Args:
-            hours (int): Number of hours to query back from now
-            
-        Returns:
-            DataFrame with strike records
-        """
+      
         if not self.conn:
             self.connect()
         
@@ -141,16 +126,7 @@ class LightningDBConnector:
             raise
     
     def export_to_csv(self, df, hours=48):
-        """
-        Export strike DataFrame to CSV file.
         
-        Args:
-            df (DataFrame): Strike data
-            hours (int): Number of hours (for filename)
-            
-        Returns:
-            Path to exported CSV file
-        """
         timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H-%M-%SZ')
         filename = f"CLDN_export_{hours}h_{timestamp}.csv"
         filepath = OUTPUT_DIR['tmp'] / filename
@@ -158,43 +134,3 @@ class LightningDBConnector:
         df.to_csv(filepath, index=False)
         logger.info(f"Exported {len(df)} records to {filepath}")
         return filepath
-
-
-def main_test():
-    """Test database connection and table inspection."""
-    db = LightningDBConnector()
-    
-    try:
-        # Connect
-        db.connect()
-        
-        # Get table info
-        info = db.get_table_info()
-        print("\n=== CLDN Strikes Table Info ===")
-        print(f"Columns: {info['columns']}")
-        print(f"\nSchema:")
-        for col_name, col_type in info['schema']:
-            print(f"  {col_name}: {col_type}")
-        print(f"\nTotal rows: {info['row_count']}")
-        print(f"Time range: {info['time_range'][0]} to {info['time_range'][1]}")
-        
-        # Query sample data
-        print("\n=== Sample Query (past 24 hours) ===")
-        df = db.query_strikes(hours=24)
-        print(f"Retrieved {len(df)} records")
-        if len(df) > 0:
-            print("\nFirst 5 records:")
-            print(df.head())
-            
-            # Export to CSV
-            csv_path = db.export_to_csv(df, hours=24)
-            print(f"\nExported to: {csv_path}")
-        else:
-            print("No records found in past 24 hours")
-        
-    finally:
-        db.close()
-
-
-if __name__ == '__main__':
-    main_test()

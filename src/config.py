@@ -1,7 +1,4 @@
-"""
-Configuration module for CWFIS Lightning project.
-Loads database credentials from .env file.
-"""
+# Loads credentials from the .env file
 
 import os
 from dotenv import load_dotenv

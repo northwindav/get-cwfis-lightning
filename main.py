@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-"""
-CLDN Lightning Strike Pipeline
-Entry point for full workflow: DB query → binning → visualization
 
-Usage:
-  python main.py                           # Extract 24h data and create map
-  python main.py --hours 12                # Extract 12h data
-  python main.py --hours 48 --output-dir ./output
-"""
+# CLI entry point for CLDN lightning retrieval and plotting
+# See README for requirements and usage instructions
+
+# Usage example
+# python main.py --hours 48 <--output-dir ./output_dir> <-v>
 
 import argparse
 import sys
@@ -24,7 +21,6 @@ from src.mapper import StrikeMapper
 
 # Setup logging
 def setup_logging(verbose: bool = False) -> logging.Logger:
-    """Configure logging with appropriate level."""
     level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(
         level=level,
@@ -33,19 +29,12 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
     )
     return logging.getLogger(__name__)
 
-
+# args:
+# hours: # of hours back from current time to request via query
+# output_dir (optional): Default is workspace root. 
+# verbose: Enables debug level logging. 
 def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False) -> dict:
-    """
-    Execute full pipeline: query → bin → map.
-    
-    Args:
-        hours: Number of hours to query (default 24)
-        output_dir: Base directory for outputs (default: workspace root)
-        verbose: Enable debug logging
-        
-    Returns:
-        Dictionary with paths to all generated files
-    """
+
     logger = setup_logging(verbose)
     
     logger.info(f"Starting CLDN pipeline (hours={hours})")
@@ -63,8 +52,8 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
     results = {}
     
     try:
-        # Phase 1: Extract data from database
-        logger.info(f"Phase 1: Querying database for past {hours}h...")
+        # Query the database
+        logger.info(f"Querying database for past {hours}h...")
         
         db = LightningDBConnector()
         db.connect()
@@ -79,8 +68,8 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
         
         db.close()
         
-        # Phase 2: Bin strikes by time
-        logger.info("Phase 2: Binning strikes by time window...")
+        # Bin strikes by age 
+        logger.info("Binning strikes by time window...")
         
         binner = StrikeBinner(str(csv_path))
         binner.load_csv()
@@ -95,8 +84,8 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
         binned_csv = binner.export_binned_csv(output_dir=tmp_dir)
         results['binned_csv'] = binned_csv
         
-        # Phase 3: Create visualization
-        logger.info("Phase 3: Creating map visualization...")
+        # Create the map
+        logger.info("Creating map visualization...")
         
         mapper = StrikeMapper(str(binned_csv))
         mapper.load_data()
@@ -110,7 +99,7 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
         map_path = mapper.create_map(output_dir=images_dir, hours=hours)
         results['map_png'] = map_path
         
-        logger.info("✅ Pipeline completed successfully!")
+        logger.info("Completed successfully!")
         logger.info(f"\nOutput files:")
         logger.info(f"  Raw CSV:    {results['raw_csv']}")
         logger.info(f"  Binned CSV: {results['binned_csv']}")
@@ -119,20 +108,20 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
         return results
         
     except Exception as e:
-        logger.error(f"❌ Pipeline failed: {e}", exc_info=verbose)
+        logger.error(f"Failed with exception(s): {e}", exc_info=verbose)
         sys.exit(1)
 
 
 def main():
-    """Parse arguments and run pipeline."""
+
     parser = argparse.ArgumentParser(
-        description='CLDN Lightning Strike Pipeline',
+        description='CLDN Lightning Strike retrieval and plotting',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py                    # Extract 24h data and create map
-  python main.py --hours 12         # Extract 12h data
-  python main.py --hours 48 --output-dir ./output
+  python main.py                    # Extract 24h data and map
+  python main.py --hours 12         # Extract 12h data and map
+  python main.py --hours 48 --output-dir ./output # 48 hour map with user-specified output directory
   python main.py -v                 # Verbose logging
         """
     )
@@ -163,7 +152,7 @@ Examples:
     if args.hours <= 0:
         parser.error("--hours must be positive")
     if args.hours > 168:  # 1 week
-        print("⚠️  Warning: Requesting data older than 1 week (hours > 168)")
+        print("Warning: Requesting data older than 1 week (hours > 168). This could be huge and slow")
     
     # Run pipeline
     results = run_pipeline(

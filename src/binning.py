@@ -1,26 +1,17 @@
-"""
-Temporal binning module for CLDN strikes.
-Implements exclusive binning: past 1h, 6h, 12h, 24h, 48h
-(no strike appears in multiple bins).
-"""
+# Bin lightning data based on time since strike
 
 import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
+# Bins are currently hard coded:
+#    - bin_1h: past 1 hour
+#    - bin_6h: past 6 hours (excluding 1h bin)
+#    - bin_12h: past 12 hours (excluding 1h, 6h bins)
+#    - bin_24h: past 24 hours (excluding 1h, 6h, 12h bins)
+#    - bin_48h: past 48 hours (excluding all previous bins)
+#    - bin_older: 48+ hours ago
 class StrikeBinner:
-    """
-    Bins lightning strikes into exclusive time windows.
-    
-    Bins (exclusive, non-overlapping):
-    - bin_1h: past 1 hour
-    - bin_6h: past 6 hours (excluding 1h bin)
-    - bin_12h: past 12 hours (excluding 1h, 6h bins)
-    - bin_24h: past 24 hours (excluding 1h, 6h, 12h bins)
-    - bin_48h: past 48 hours (excluding all previous bins)
-    - bin_older: 48+ hours ago
-    """
     
     BIN_THRESHOLDS = {
         'bin_1h': 1,
@@ -30,23 +21,19 @@ class StrikeBinner:
         'bin_48h': 48
     }
     
+    # Init with path to csv file.
     def __init__(self, csv_path: str):
-        """
-        Initialize with CSV file path.
-        
-        Args:
-            csv_path: Path to CLDN export CSV file
-        """
+      
         self.csv_path = Path(csv_path)
         self.df = None
         self.binned_df = None
         self.reference_time = None
         
     def load_csv(self) -> pd.DataFrame:
-        """Load CSV and parse timestamp column."""
+
         self.df = pd.read_csv(self.csv_path)
         
-        # Parse rep_date as datetime
+        # Parse rep_date as datetime. Should be in UTC.
         self.df['rep_date'] = pd.to_datetime(self.df['rep_date'], utc=True)
         
         # Use the maximum timestamp as reference (most recent strike)
@@ -58,13 +45,9 @@ class StrikeBinner:
         
         return self.df
     
+    # Do the binning. Strikes are assigned to a single bin and there is no overlap in bins.
     def bin_strikes(self) -> pd.DataFrame:
-        """
-        Assign each strike to an exclusive time bin.
-        
-        Returns:
-            DataFrame with 'time_bin' column added
-        """
+   
         if self.df is None:
             raise ValueError("CSV not loaded. Call load_csv() first.")
         
@@ -77,7 +60,7 @@ class StrikeBinner:
         self.df['time_bin'] = 'bin_older'
         
         # Assign bins in reverse order (oldest threshold first)
-        # so that earlier thresholds override
+        # so that recent bins override older bins
         self.df.loc[self.df['hours_elapsed'] < 48, 'time_bin'] = 'bin_48h'
         self.df.loc[self.df['hours_elapsed'] < 24, 'time_bin'] = 'bin_24h'
         self.df.loc[self.df['hours_elapsed'] < 12, 'time_bin'] = 'bin_12h'
@@ -88,13 +71,9 @@ class StrikeBinner:
         
         return self.binned_df
     
+    # Simple counts by bin for mapping and for sanity checking
     def get_bin_stats(self) -> dict:
-        """
-        Return count statistics for each bin.
-        
-        Returns:
-            Dictionary with bin names as keys and counts as values
-        """
+
         if self.binned_df is None:
             raise ValueError("Strikes not binned. Call bin_strikes() first.")
         
@@ -111,15 +90,7 @@ class StrikeBinner:
         return stats
     
     def export_binned_csv(self, output_dir: str = None) -> Path:
-        """
-        Export binned data to CSV.
-        
-        Args:
-            output_dir: Directory to save binned CSV (default: tmp/)
-            
-        Returns:
-            Path to exported CSV file
-        """
+     
         if self.binned_df is None:
             raise ValueError("Strikes not binned. Call bin_strikes() first.")
         
@@ -141,27 +112,3 @@ class StrikeBinner:
         print(f"Exported binned data to {output_path}")
         
         return output_path
-
-
-def main():
-    """Test binning with extracted CSV."""
-    csv_path = "tmp/CLDN_export_24h_2026-05-19T22-08-07Z.csv"
-    
-    binner = StrikeBinner(csv_path)
-    binner.load_csv()
-    binner.bin_strikes()
-    
-    # Print statistics
-    stats = binner.get_bin_stats()
-    print("\n=== Bin Statistics ===")
-    for bin_name, count in stats.items():
-        print(f"{bin_name}: {count:,} strikes")
-    
-    # Export binned data
-    binner.export_binned_csv()
-    
-    return binner
-
-
-if __name__ == "__main__":
-    binner = main()

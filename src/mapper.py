@@ -1,8 +1,4 @@
-"""
-Geospatial visualization module for CLDN strikes.
-Maps strikes on Canada with color-coded time bins.
-Projection: EPSG:3978 (Canada Albers Equal Area Conic)
-"""
+# Plot strikes on a map of Canada, color-coded by time bin.
 
 import pandas as pd
 import geopandas as gpd
@@ -19,10 +15,6 @@ warnings.filterwarnings('ignore')
 
 
 class StrikeMapper:
-    """
-    Visualizes lightning strikes on a map of Canada.
-    Color-codes by time bin.
-    """
     
     # Color scheme for bins (5 colors from red=recent to blue=older)
     BIN_COLORS = {
@@ -44,17 +36,12 @@ class StrikeMapper:
     }
     
     def __init__(self, csv_path: str):
-        """
-        Initialize with binned CSV file.
-        
-        Args:
-            csv_path: Path to CLDN binned CSV (output from binning.py)
-        """
+       
         self.csv_path = Path(csv_path)
         self.gdf = None
         
     def load_data(self) -> gpd.GeoDataFrame:
-        """Load binned CSV and convert to GeoDataFrame."""
+       
         df = pd.read_csv(self.csv_path)
         
         # Parse timestamp
@@ -73,27 +60,11 @@ class StrikeMapper:
         return self.gdf
     
     def load_canada_provinces(self) -> gpd.GeoDataFrame:
-        """
-        Load Canadian provinces and territories.
-        Uses embedded data by default, tries to download detailed data if available.
-        
-        Returns:
-            GeoDataFrame with provincial/territorial boundaries
-        """
+       
         return try_download_detailed_provinces()
     
     def create_map(self, figsize=(16, 12), output_dir: str = None, hours: int = 24) -> Path:
-        """
-        Create map visualization of strikes with provincial boundaries.
         
-        Args:
-            figsize: Figure size (width, height) in inches
-            output_dir: Directory to save PNG (default: images/)
-            hours: Number of hours in the data (used for title and filename)
-            
-        Returns:
-            Path to saved PNG file
-        """
         if self.gdf is None:
             raise ValueError("Data not loaded. Call load_data() first.")
         
@@ -112,7 +83,7 @@ class StrikeMapper:
         ax.set_ylim(-800000, 3100000)
         
         # Fill entire background with light blue ocean
-        ax.set_facecolor('#B3E5FC')
+        ax.set_facecolor("#13A3E6")
         
         # Load and plot provinces/territories
         provinces = self.load_canada_provinces()
@@ -145,7 +116,7 @@ class StrikeMapper:
                             x, y = interior.xy
                             ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
             
-            print(f"✓ Plotted {len(provinces)} provinces/territories with black boundaries")
+            print(f"Plotted {len(provinces)} provinces/territories with black boundaries")
         else:
             print("Warning: No provinces loaded")
         
@@ -210,7 +181,7 @@ class StrikeMapper:
         return output_path
     
     def get_summary_stats(self) -> dict:
-        """Return summary statistics."""
+      
         if self.gdf is None:
             raise ValueError("Data not loaded. Call load_data() first.")
         
@@ -229,32 +200,3 @@ class StrikeMapper:
             'bin_counts': self.gdf['time_bin'].value_counts().to_dict()
         }
         return stats
-
-
-def main():
-    """Test mapper with binned data."""
-    binned_csv = "tmp/CLDN_binned_24h_2026-05-19T22-14-22Z.csv"
-    
-    mapper = StrikeMapper(binned_csv)
-    mapper.load_data()
-    
-    # Print summary
-    stats = mapper.get_summary_stats()
-    print("\n=== Summary Statistics ===")
-    print(f"Total strikes: {stats['total_strikes']:,}")
-    print(f"Date range: {stats['date_range']['min']} to {stats['date_range']['max']}")
-    print(f"Longitude range: {stats['bounds']['lon']['min']:.2f}° to {stats['bounds']['lon']['max']:.2f}°")
-    print(f"Latitude range: {stats['bounds']['lat']['min']:.2f}° to {stats['bounds']['lat']['max']:.2f}°")
-    print("\nBin distribution:")
-    for bin_name, count in stats['bin_counts'].items():
-        print(f"  {bin_name}: {count:,}")
-    
-    # Create map
-    map_path = mapper.create_map()
-    print(f"\nMap created: {map_path}")
-    
-    return mapper
-
-
-if __name__ == "__main__":
-    mapper = main()
