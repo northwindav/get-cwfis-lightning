@@ -7,7 +7,7 @@ A complete pipeline to extract Canadian Lightning Detection Network (CLDN) strik
 ## Overview
 
 This project:
-1. Queries the CWFIS CLDN database (PostgreSQL on s-edm-genii) for lightning strikes from the past N hours
+1. Queries the CWFIS CLDN database for lightning strikes from the past N hours
 2. Bins strikes into exclusive time windows (1h, 6h, 12h, 24h, 48h)
 3. MPlots all strikes on an EPSG3978 map of Canada including:
    - All provinces and territories outlined
