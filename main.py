@@ -81,7 +81,7 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
             if count > 0:
                 logger.info(f"  {bin_name}: {count:,} strikes")
         
-        binned_csv = binner.export_binned_csv(output_dir=tmp_dir)
+        binned_csv = binner.export_binned_csv(output_dir=tmp_dir, hours=hours)
         results['binned_csv'] = binned_csv
         
         # Create the map

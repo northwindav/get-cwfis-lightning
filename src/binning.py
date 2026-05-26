@@ -89,7 +89,7 @@ class StrikeBinner:
         
         return stats
     
-    def export_binned_csv(self, output_dir: str = None) -> Path:
+    def export_binned_csv(self, output_dir: str = None, hours: int = 24) -> Path:
      
         if self.binned_df is None:
             raise ValueError("Strikes not binned. Call bin_strikes() first.")
@@ -101,7 +101,7 @@ class StrikeBinner:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H-%M-%SZ')
-        output_path = output_dir / f"CLDN_binned_24h_{timestamp}.csv"
+        output_path = output_dir / f"CLDN_binned_{hours}h_{timestamp}.csv"
         
         # Keep only relevant columns for output
         export_cols = ['cld_id', 'rep_date', 'lon', 'lat', 'peak_current', 
