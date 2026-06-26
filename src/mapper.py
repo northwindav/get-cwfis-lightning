@@ -67,14 +67,20 @@ class StrikeMapper:
     
     def _download_natural_earth_rivers(self) -> gpd.GeoDataFrame:
         """Download Natural Earth rivers dataset from online GeoJSON source, with caching."""
+        import urllib.request
+        import json
+
         def fetch():
             urls = [
+                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson",
                 "https://naciscdn.org/naturalearth/10m/physical/ne_10m_rivers_lake_centerlines.geojson",
-                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"
             ]
             for url in urls:
                 try:
-                    gdf = gpd.read_file(url)
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        data = json.loads(resp.read())
+                    gdf = gpd.GeoDataFrame.from_features(data['features'], crs='EPSG:4326')
                     print(f"Loaded {len(gdf)} river features from {url}")
                     return gdf
                 except Exception as e:
@@ -87,14 +93,20 @@ class StrikeMapper:
     
     def _download_natural_earth_lakes(self) -> gpd.GeoDataFrame:
         """Download Natural Earth lakes dataset from online GeoJSON source, with caching."""
+        import urllib.request
+        import json
+
         def fetch():
             urls = [
+                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson",
                 "https://naciscdn.org/naturalearth/10m/physical/ne_10m_lakes.geojson",
-                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson"
             ]
             for url in urls:
                 try:
-                    gdf = gpd.read_file(url)
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        data = json.loads(resp.read())
+                    gdf = gpd.GeoDataFrame.from_features(data['features'], crs='EPSG:4326')
                     print(f"Loaded {len(gdf)} lake features from {url}")
                     return gdf
                 except Exception as e:

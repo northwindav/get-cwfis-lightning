@@ -2,5 +2,13 @@
   "provinces": {
     "timestamp": "2026-06-26T13:09:26.672224",
     "feature_count": 4596
+  },
+  "rivers": {
+    "timestamp": "2026-06-26T13:22:27.650102",
+    "feature_count": 1455
+  },
+  "lakes": {
+    "timestamp": "2026-06-26T13:22:35.605288",
+    "feature_count": 1355
   }
 }
