@@ -63,7 +63,7 @@ class StrikeMapper:
        
         return try_download_detailed_provinces()
     
-    def create_map(self, figsize=(16, 12), output_dir: str = None, hours: int = 24) -> Path:
+    def create_map(self, figsize=(16, 12), output_dir: str = None, hours: int = 24, bbox: dict = None) -> Path:
         
         if self.gdf is None:
             raise ValueError("Data not loaded. Call load_data() first.")
@@ -77,10 +77,20 @@ class StrikeMapper:
         # Create figure with light blue ocean background
         fig, ax = plt.subplots(figsize=figsize, facecolor='#E8F4F8')
         
-        # Set map extent (Canada bounds in EPSG:3978)
-        # Approximate bounds: -2.8M to 2.9M (X), -0.8M to 3.1M (Y)
-        ax.set_xlim(-2800000, 2900000)
-        ax.set_ylim(-800000, 3100000)
+        # Set map extent (Canada bounds in EPSG:3978 or bbox if provided)
+        if bbox is not None:
+            from shapely.geometry import box
+            bbox_geom = box(bbox['min_lon'], bbox['min_lat'], bbox['max_lon'], bbox['max_lat'])
+            bbox_gdf = gpd.GeoDataFrame([1], geometry=[bbox_geom], crs='EPSG:4326')
+            bbox_gdf = bbox_gdf.to_crs('EPSG:3978')
+            bbox_proj = bbox_gdf.geometry[0].bounds
+            ax.set_xlim(bbox_proj[0], bbox_proj[2])
+            ax.set_ylim(bbox_proj[1], bbox_proj[3])
+        else:
+            # Default Canada-wide bounds in EPSG:3978
+            # Approximate bounds: -2.8M to 2.9M (X), -0.8M to 3.1M (Y)
+            ax.set_xlim(-2800000, 2900000)
+            ax.set_ylim(-800000, 3100000)
         
         # Fill entire background with light blue ocean
         ax.set_facecolor("#13A3E6")
