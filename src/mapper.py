@@ -10,6 +10,7 @@ from pathlib import Path
 import warnings
 
 from .provinces_data import try_download_detailed_provinces
+from .geojson_cache import GeoJSONCache
 
 warnings.filterwarnings('ignore')
 
@@ -39,6 +40,7 @@ class StrikeMapper:
        
         self.csv_path = Path(csv_path)
         self.gdf = None
+        self.cache = GeoJSONCache()
         
     def load_data(self) -> gpd.GeoDataFrame:
        
@@ -64,56 +66,44 @@ class StrikeMapper:
         return try_download_detailed_provinces()
     
     def _download_natural_earth_rivers(self) -> gpd.GeoDataFrame:
-        """Download Natural Earth rivers dataset from online GeoJSON source."""
-        try:
-            # Natural Earth rivers as GeoJSON - try multiple URLs
+        """Download Natural Earth rivers dataset from online GeoJSON source, with caching."""
+        def fetch():
             urls = [
                 "https://naciscdn.org/naturalearth/10m/physical/ne_10m_rivers_lake_centerlines.geojson",
                 "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"
             ]
-            
-            rivers = None
             for url in urls:
                 try:
-                    rivers = gpd.read_file(url)
-                    print(f"Loaded {len(rivers)} river features from Natural Earth")
-                    return rivers
-                except:
+                    gdf = gpd.read_file(url)
+                    print(f"Loaded {len(gdf)} river features from {url}")
+                    return gdf
+                except Exception as e:
+                    print(f"Warning: rivers failed from {url}: {e}")
                     continue
-            
-            if rivers is None:
-                print("Warning: Rivers data not available from any source")
-            return rivers
-            
-        except Exception as e:
-            print(f"Warning: Failed to load rivers: {e}")
+            print("Warning: Rivers data not available from any source")
             return None
+
+        return self.cache.get_or_fetch('rivers', fetch)
     
     def _download_natural_earth_lakes(self) -> gpd.GeoDataFrame:
-        """Download Natural Earth lakes dataset from online GeoJSON source."""
-        try:
-            # Natural Earth lakes as GeoJSON - try multiple URLs
+        """Download Natural Earth lakes dataset from online GeoJSON source, with caching."""
+        def fetch():
             urls = [
                 "https://naciscdn.org/naturalearth/10m/physical/ne_10m_lakes.geojson",
                 "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson"
             ]
-            
-            lakes = None
             for url in urls:
                 try:
-                    lakes = gpd.read_file(url)
-                    print(f"Loaded {len(lakes)} lake features from Natural Earth")
-                    return lakes
-                except:
+                    gdf = gpd.read_file(url)
+                    print(f"Loaded {len(gdf)} lake features from {url}")
+                    return gdf
+                except Exception as e:
+                    print(f"Warning: lakes failed from {url}: {e}")
                     continue
-            
-            if lakes is None:
-                print("Warning: Lakes data not available from any source")
-            return lakes
-            
-        except Exception as e:
-            print(f"Warning: Failed to load lakes: {e}")
+            print("Warning: Lakes data not available from any source")
             return None
+
+        return self.cache.get_or_fetch('lakes', fetch)
     
     def _clip_features_to_bounds(self, features: gpd.GeoDataFrame, bounds_geom) -> gpd.GeoDataFrame:
         """Clip feature geodataframe to bounding geometry."""
@@ -189,6 +179,8 @@ class StrikeMapper:
             # Draw province boundaries
             for idx, row in provinces.iterrows():
                 geom = row.geometry
+                if geom is None:
+                    continue
                 if geom.geom_type == 'Polygon':
                     x, y = geom.exterior.xy
                     ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
