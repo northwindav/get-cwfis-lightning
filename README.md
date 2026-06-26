@@ -1,5 +1,7 @@
 # Get-CWFIS-Lightning
 
+**This README is out of date with respect to new features, but will still work**
+
 _This code was written with the assistance of AI agents, but has been reviewed by a human_
 
 A complete pipeline to extract Canadian Lightning Detection Network (CLDN) strike data from PostgreSQL, bin strikes by time windows, and generate publication-ready maps of Canada with provincial/territorial boundaries.
