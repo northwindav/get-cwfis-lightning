@@ -5,7 +5,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import ListedColormap
-from shapely.geometry import Point
+from shapely.geometry import Point, box
 from pathlib import Path
 import warnings
 
@@ -51,7 +51,7 @@ class StrikeMapper:
         geometry = [Point(xy) for xy in zip(df['lon'], df['lat'])]
         self.gdf = gpd.GeoDataFrame(df, geometry=geometry, crs='EPSG:4326')
         
-        # Reproject to Canada Albers (EPSG:3978)
+        # Reproject to Canada Albers (EPSG:3978) as default
         self.gdf = self.gdf.to_crs('EPSG:3978')
         
         print(f"Loaded {len(self.gdf)} strikes")
@@ -63,7 +63,72 @@ class StrikeMapper:
        
         return try_download_detailed_provinces()
     
-    def create_map(self, figsize=(16, 12), output_dir: str = None, hours: int = 24, bbox: dict = None) -> Path:
+    def _download_natural_earth_rivers(self) -> gpd.GeoDataFrame:
+        """Download Natural Earth rivers dataset from online GeoJSON source."""
+        try:
+            # Natural Earth rivers as GeoJSON - try multiple URLs
+            urls = [
+                "https://naciscdn.org/naturalearth/10m/physical/ne_10m_rivers_lake_centerlines.geojson",
+                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"
+            ]
+            
+            rivers = None
+            for url in urls:
+                try:
+                    rivers = gpd.read_file(url)
+                    print(f"Loaded {len(rivers)} river features from Natural Earth")
+                    return rivers
+                except:
+                    continue
+            
+            if rivers is None:
+                print("Warning: Rivers data not available from any source")
+            return rivers
+            
+        except Exception as e:
+            print(f"Warning: Failed to load rivers: {e}")
+            return None
+    
+    def _download_natural_earth_lakes(self) -> gpd.GeoDataFrame:
+        """Download Natural Earth lakes dataset from online GeoJSON source."""
+        try:
+            # Natural Earth lakes as GeoJSON - try multiple URLs
+            urls = [
+                "https://naciscdn.org/naturalearth/10m/physical/ne_10m_lakes.geojson",
+                "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson"
+            ]
+            
+            lakes = None
+            for url in urls:
+                try:
+                    lakes = gpd.read_file(url)
+                    print(f"Loaded {len(lakes)} lake features from Natural Earth")
+                    return lakes
+                except:
+                    continue
+            
+            if lakes is None:
+                print("Warning: Lakes data not available from any source")
+            return lakes
+            
+        except Exception as e:
+            print(f"Warning: Failed to load lakes: {e}")
+            return None
+    
+    def _clip_features_to_bounds(self, features: gpd.GeoDataFrame, bounds_geom) -> gpd.GeoDataFrame:
+        """Clip feature geodataframe to bounding geometry."""
+        if features is None:
+            return None
+        try:
+            clipped = gpd.clip(features, bounds_geom)
+            print(f"Clipped features to bounds: {len(clipped)} features remain")
+            return clipped if len(clipped) > 0 else None
+        except Exception as e:
+            print(f"Warning: Failed to clip features: {e}")
+            return None
+    
+    def create_map(self, figsize=(16, 12), output_dir: str = None, hours: int = 24, 
+                   bbox: dict = None, region_name: str = None, crs: str = None) -> Path:
         
         if self.gdf is None:
             raise ValueError("Data not loaded. Call load_data() first.")
@@ -74,23 +139,34 @@ class StrikeMapper:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
+        # Determine projection CRS (default: Canada Albers)
+        map_crs = crs if crs else 'EPSG:3978'
+        crs_name = 'Canada Albers' if map_crs == 'EPSG:3978' else map_crs
+        
         # Create figure with light blue ocean background
         fig, ax = plt.subplots(figsize=figsize, facecolor='#E8F4F8')
         
-        # Set map extent (Canada bounds in EPSG:3978 or bbox if provided)
+        # Reproject strike data to target CRS if needed
+        if self.gdf.crs != map_crs:
+            gdf_plot = self.gdf.to_crs(map_crs)
+        else:
+            gdf_plot = self.gdf
+        
+        # Determine map bounds and setup axis
         if bbox is not None:
-            from shapely.geometry import box
+            # Bounding box mode: project bounds and set axis
             bbox_geom = box(bbox['min_lon'], bbox['min_lat'], bbox['max_lon'], bbox['max_lat'])
             bbox_gdf = gpd.GeoDataFrame([1], geometry=[bbox_geom], crs='EPSG:4326')
-            bbox_gdf = bbox_gdf.to_crs('EPSG:3978')
+            bbox_gdf = bbox_gdf.to_crs(map_crs)
             bbox_proj = bbox_gdf.geometry[0].bounds
             ax.set_xlim(bbox_proj[0], bbox_proj[2])
             ax.set_ylim(bbox_proj[1], bbox_proj[3])
+            map_bounds = bbox_geom
         else:
-            # Default Canada-wide bounds in EPSG:3978
-            # Approximate bounds: -2.8M to 2.9M (X), -0.8M to 3.1M (Y)
+            # Canada-wide mode: use default bounds
             ax.set_xlim(-2800000, 2900000)
             ax.set_ylim(-800000, 3100000)
+            map_bounds = box(-141, 40, -55, 85)  # Approximate Canada bounds in WGS84
         
         # Fill entire background with light blue ocean
         ax.set_facecolor("#13A3E6")
@@ -98,27 +174,28 @@ class StrikeMapper:
         # Load and plot provinces/territories
         provinces = self.load_canada_provinces()
         if provinces is not None and len(provinces) > 0:
+            # Reproject provinces to target CRS
+            if provinces.crs != map_crs:
+                provinces = provinces.to_crs(map_crs)
+            
             # Plot provinces with light grey fill
             provinces.plot(
                 ax=ax,
-                color='#E8E8E8',      # Light grey
-                edgecolor='none',     # No edge color from plot call
+                color='#E8E8E8',
+                edgecolor='none',
                 alpha=0.95
             )
             
-            # Explicitly draw all boundaries in black with explicit linewidth
+            # Draw province boundaries
             for idx, row in provinces.iterrows():
                 geom = row.geometry
                 if geom.geom_type == 'Polygon':
-                    # Draw exterior ring
                     x, y = geom.exterior.xy
                     ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
-                    # Draw holes (interior rings)
                     for interior in geom.interiors:
                         x, y = interior.xy
                         ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
                 elif geom.geom_type == 'MultiPolygon':
-                    # Handle multipart geometries
                     for part in geom.geoms:
                         x, y = part.exterior.xy
                         ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
@@ -126,13 +203,34 @@ class StrikeMapper:
                             x, y = interior.xy
                             ax.plot(x, y, color='#000000', linewidth=1.2, zorder=5)
             
-            print(f"Plotted {len(provinces)} provinces/territories with black boundaries")
+            print(f"Plotted {len(provinces)} provinces/territories")
         else:
             print("Warning: No provinces loaded")
         
+        # Load and plot roads and water features if bbox or region specified
+        if bbox is not None or region_name is not None:
+            # Download rivers and lakes
+            rivers = self._download_natural_earth_rivers()
+            lakes = self._download_natural_earth_lakes()
+            
+            # Clip to map bounds and reproject
+            if rivers is not None:
+                rivers = self._clip_features_to_bounds(rivers, map_bounds)
+                if rivers is not None and rivers.crs != map_crs:
+                    rivers = rivers.to_crs(map_crs)
+                if rivers is not None and len(rivers) > 0:
+                    rivers.plot(ax=ax, color='#4169E1', linewidth=0.8, zorder=2)
+            
+            if lakes is not None:
+                lakes = self._clip_features_to_bounds(lakes, map_bounds)
+                if lakes is not None and lakes.crs != map_crs:
+                    lakes = lakes.to_crs(map_crs)
+                if lakes is not None and len(lakes) > 0:
+                    lakes.plot(ax=ax, color='#87CEEB', alpha=0.7, zorder=2)
+        
         # Plot strikes by bin (in order so newer ones are on top)
         for bin_name in ['bin_older', 'bin_48h', 'bin_24h', 'bin_12h', 'bin_6h', 'bin_1h']:
-            bin_data = self.gdf[self.gdf['time_bin'] == bin_name]
+            bin_data = gdf_plot[gdf_plot['time_bin'] == bin_name]
             
             if len(bin_data) > 0:
                 ax.scatter(
@@ -165,11 +263,11 @@ class StrikeMapper:
                 framealpha=0.95
             )
         
-        # Add timestamp annotation
+        # Add timestamp annotation with projection info
         timestamp_str = pd.Timestamp.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
         ax.text(
             0.98, 0.02,
-            f"Generated: {timestamp_str}\nProjection: EPSG:3978 (Canada Albers)",
+            f"Generated: {timestamp_str}\nProjection: {map_crs}",
             transform=ax.transAxes,
             fontsize=9,
             ha='right',
@@ -179,9 +277,14 @@ class StrikeMapper:
         
         plt.tight_layout()
         
-        # Save figure
+        # Generate output filename with region name if provided
         timestamp = pd.Timestamp.utcnow().strftime('%Y-%m-%dT%H-%M-%SZ')
-        output_path = output_dir / f"CLDN_strikes_{hours}h_{timestamp}.png"
+        if region_name:
+            # Convert region name to title case (e.g., 'british-columbia' -> 'British_Columbia')
+            region_label = region_name.replace('-', '_').title()
+            output_path = output_dir / f"CLDN_strikes_{hours}h_{region_label}_{timestamp}.png"
+        else:
+            output_path = output_dir / f"CLDN_strikes_{hours}h_{timestamp}.png"
         
         fig.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='#E8F4F8')
         print(f"Map saved to {output_path}")

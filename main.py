@@ -34,7 +34,10 @@ def setup_logging(verbose: bool = False) -> logging.Logger:
 # output_dir (optional): Default is workspace root. 
 # verbose: Enables debug level logging.
 # bbox (optional): Bounding box dict with keys: min_lon, min_lat, max_lon, max_lat (WGS84)
-def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False, bbox: dict = None) -> dict:
+# region_name (optional): Name of the region for filename and CRS lookup
+# region_crs (optional): Coordinate system to use for this region
+def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False, bbox: dict = None, 
+                 region_name: str = None, region_crs: str = None) -> dict:
 
     logger = setup_logging(verbose)
     
@@ -100,8 +103,11 @@ def run_pipeline(hours: int = 24, output_dir: Path = None, verbose: bool = False
         if bbox is not None:
             logger.info(f"Zooming to bounding box: ({bbox['min_lon']}, {bbox['min_lat']}) to "
                        f"({bbox['max_lon']}, {bbox['max_lat']})")
+        elif region_name is not None:
+            logger.info(f"Zooming to region: {region_name} (CRS: {region_crs})")
         
-        map_path = mapper.create_map(output_dir=images_dir, hours=hours, bbox=bbox)
+        map_path = mapper.create_map(output_dir=images_dir, hours=hours, bbox=bbox, 
+                                    region_name=region_name, crs=region_crs)
         results['map_png'] = map_path
         
         logger.info("Completed successfully!")
@@ -183,6 +189,9 @@ Examples:
         parser.error("Cannot specify both --bbox and --region; choose one or the other")
     
     bbox = None
+    region_name = None
+    region_crs = None
+    
     if args.bbox is not None:
         # Validate bbox coordinates
         min_lon, min_lat, max_lon, max_lat = args.bbox
@@ -194,7 +203,10 @@ Examples:
     
     elif args.region is not None:
         try:
-            bbox = get_region_bounds(args.region)
+            region_bounds = get_region_bounds(args.region)
+            bbox = {k: v for k, v in region_bounds.items() if k in ['min_lon', 'min_lat', 'max_lon', 'max_lat']}
+            region_crs = region_bounds.get('crs', 'EPSG:3978')
+            region_name = args.region
         except ValueError as e:
             parser.error(str(e))
     
@@ -203,7 +215,9 @@ Examples:
         hours=args.hours,
         output_dir=args.output_dir,
         verbose=args.verbose,
-        bbox=bbox
+        bbox=bbox,
+        region_name=region_name,
+        region_crs=region_crs
     )
     
     return 0
